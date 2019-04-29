@@ -9,22 +9,45 @@ import arrow.higherkind
 import arrow.typeclasses.Applicative
 import arrow.typeclasses.Foldable
 
+/**
+ * A wrapper data type also considered by the @extension mechanisms to forward type class
+ * instance methods into both the wrapper and the wrapped data type. Ex. SortedMap<A, B>
+ *
+ * A data type is considered a wrapper if
+ * - It contains a single constructor with one parameter whose type is a type constructor with one type parameter
+ * - It's a sub type of the type it wraps
+ *
+ * The type class @extension mechanism will project then all syntax generated for the Wrapper also into the Wrapped
+ * type constructor as extension functions.
+ */
 @higherkind
 data class SortedMapK<A : Comparable<A>, B>(private val map: SortedMap<A, B>) : SortedMapKOf<A, B>, SortedMapKKindedJ<A, B>, SortedMap<A, B> by map {
 
+  /**
+   * Apply a function to a SortedMapK value, returning a new SortedMapK value
+   */
   fun <C> map(f: (B) -> C): SortedMapK<A, C> =
     this.map.map { it.key to f(it.value) }.toMap().toSortedMap().k()
 
+  /**
+   * Apply a function while iterating simultaneously over two SortedMapK values, returning a new SortedMapK value
+   */
   fun <C, Z> map2(fc: SortedMapK<A, C>, f: (B, C) -> Z): SortedMapK<A, Z> =
     if (fc.isEmpty()) sortedMapOf<A, Z>().k()
     else this.map.flatMap { (a, b) ->
       fc.getOption(a).map { Tuple2(a, f(b, it)) }.k().asIterable()
     }.k()
 
+  /**
+   * Apply a function lazily while iterating simultaneously over two SortedMapK values, returning a new Eval of SortedMapK value
+   */
   fun <C, Z> map2Eval(fc: Eval<SortedMapK<A, C>>, f: (B, C) -> Z): Eval<SortedMapK<A, Z>> =
     if (fc.value().isEmpty()) Eval.now(sortedMapOf<A, Z>().k())
     else fc.map { c -> this.map2(c, f) }
 
+  /**
+   * Apply a map of functions to a SortedMapK value, returning a new SortedMapK value
+   */
   fun <C> ap(ff: SortedMapK<A, (B) -> C>): SortedMapK<A, C> =
     ff.flatMap { this.map(it) }
 
